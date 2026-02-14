@@ -6,12 +6,20 @@
     <title>Travel Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --visited: #3b82f6; --lived: #ef4444; --empty: #e2e8f0; }
+        :root { --visited: #3b82f6; --lived: #ef4444; --empty: #ffffff; }
         body { font-family: -apple-system, sans-serif; margin: 0; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        #dashboard { padding: 15px; display: flex; justify-content: space-around; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
-        .stat-val { font-size: 20px; font-weight: 800; color: #1e293b; display: block; }
-        .stat-lab { font-size: 10px; color: #64748b; text-transform: uppercase; }
+        
+        /* Dashboard */
+        #dashboard { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
+        .stat-group { border: 1px solid #f1f5f9; padding: 8px; border-radius: 8px; text-align: center; }
+        .stat-val { font-size: 18px; font-weight: 800; color: #1e293b; display: block; }
+        .stat-lab { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; }
+
+        /* Map & Info Box */
         #map { flex-grow: 1; width: 100%; background: #aad3df; }
+        #info-box { position: absolute; top: 110px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: none; }
+
+        /* Controls */
         .controls { padding: 10px; background: white; border-top: 1px solid #e2e8f0; z-index: 10; padding-bottom: 30px; }
         .mode-selector { display: flex; gap: 5px; margin-bottom: 10px; }
         .mode-btn { flex: 1; border: none; padding: 12px; border-radius: 8px; font-weight: 600; background: #f1f5f9; color: #64748b; }
@@ -24,9 +32,19 @@
 </head>
 <body>
 
+<div id="info-box">Country Name</div>
+
 <div id="dashboard">
-    <div style="text-align:center"><span id="count-world" class="stat-val">0</span><span class="stat-lab">World</span></div>
-    <div style="text-align:center"><span id="count-us" class="stat-val">0</span><span class="stat-lab">US States</span></div>
+    <div class="stat-group">
+        <span id="world-stats" class="stat-val">0%</span>
+        <span class="stat-lab">World Visited</span>
+        <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-world">0</span></div>
+    </div>
+    <div class="stat-group">
+        <span id="us-stats" class="stat-val">0%</span>
+        <span class="stat-lab">USA Visited</span>
+        <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-us">0</span></div>
+    </div>
 </div>
 
 <div id="map"></div>
@@ -34,7 +52,7 @@
 <div class="controls">
     <div class="mode-selector">
         <button id="btn-visited" class="mode-btn active" data-mode="visited" onclick="setMode('visited')">Visited</button>
-        <button id="btn-lived" class="mode-btn" data-mode="lived" onclick="setMode('lived')">Lived</button>
+        <button id="btn-lived" class="mode-btn" data-mode="lived" onclick="setMode('lived')">Lived Here</button>
     </div>
     <div class="tab-bar">
         <button id="tab-world" class="tab active" onclick="switchView('world')">WORLD</button>
@@ -47,9 +65,9 @@
     let currentMode = 'visited';
     let currentView = 'world';
     let geoLayer;
+    let totalCounts = { world: 177, us: 50 }; // Approximates for % calculation
     let db = JSON.parse(localStorage.getItem('travelStorage')) || { world: {}, us: {} };
 
-    // Initialize Map
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
 
     function setMode(mode) {
@@ -63,11 +81,15 @@
         const status = db[currentView][name];
         return {
             fillColor: status === 'visited' ? '#3b82f6' : status === 'lived' ? '#ef4444' : '#ffffff',
-            weight: 1,
-            opacity: 1,
-            color: '#cbd5e1',
-            fillOpacity: 0.8
+            weight: 1, opacity: 1, color: '#cbd5e1', fillOpacity: 0.8
         };
+    }
+
+    function showName(name) {
+        const box = document.getElementById('info-box');
+        box.innerText = name;
+        box.style.display = 'block';
+        setTimeout(() => { box.style.display = 'none'; }, 2000);
     }
 
     async function switchView(view) {
@@ -79,41 +101,54 @@
             ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
             : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
 
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-            
-            if (geoLayer) map.removeLayer(geoLayer);
+        const res = await fetch(url);
+        const data = await res.json();
+        totalCounts[view] = data.features.length;
+        
+        if (geoLayer) map.removeLayer(geoLayer);
+        geoLayer = L.geoJson(data, {
+            style: styleFeature,
+            onEachFeature: (feature, layer) => {
+                layer.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    const name = feature.properties.name || feature.id;
+                    showName(name);
+                    
+                    if (db[currentView][name] === currentMode) {
+                        delete db[currentView][name];
+                    } else {
+                        db[currentView][name] = currentMode;
+                    }
+                    
+                    localStorage.setItem('travelStorage', JSON.stringify(db));
+                    geoLayer.setStyle(styleFeature);
+                    updateStats();
+                });
+            }
+        }).addTo(map);
 
-            geoLayer = L.geoJson(data, {
-                style: styleFeature,
-                onEachFeature: (feature, layer) => {
-                    layer.on('click', (e) => {
-                        L.DomEvent.stopPropagation(e);
-                        const name = feature.properties.name || feature.id;
-                        if (db[currentView][name] === currentMode) {
-                            delete db[currentView][name];
-                        } else {
-                            db[currentView][name] = currentMode;
-                        }
-                        localStorage.setItem('travelStorage', JSON.stringify(db));
-                        geoLayer.setStyle(styleFeature);
-                        updateStats();
-                    });
-                }
-            }).addTo(map);
-
-            if (view === 'us') map.fitBounds(geoLayer.getBounds());
-            else map.setView([20, 0], 2);
-            updateStats();
-        } catch (err) {
-            console.error("Failed to load map data", err);
-        }
+        if (view === 'us') map.fitBounds(geoLayer.getBounds());
+        else map.setView([20, 0], 2);
+        updateStats();
     }
 
     function updateStats() {
-        document.getElementById('count-world').innerText = Object.keys(db.world).length;
-        document.getElementById('count-us').innerText = Object.keys(db.us).length;
+        // World Calc
+        const worldEntries = Object.values(db.world);
+        const worldVisited = worldEntries.filter(v => v === 'visited' || v === 'lived').length;
+        const worldLived = worldEntries.filter(v => v === 'lived').length;
+        const worldPerc = Math.round((worldVisited / totalCounts.world) * 100);
+        
+        // US Calc
+        const usEntries = Object.values(db.us);
+        const usVisited = usEntries.filter(v => v === 'visited' || v === 'lived').length;
+        const usLived = usEntries.filter(v => v === 'lived').length;
+        const usPerc = Math.round((usVisited / totalCounts.us) * 100);
+
+        document.getElementById('world-stats').innerText = worldPerc + '%';
+        document.getElementById('lived-world').innerText = worldLived;
+        document.getElementById('us-stats').innerText = usPerc + '%';
+        document.getElementById('lived-us').innerText = usLived;
     }
 
     switchView('world');
