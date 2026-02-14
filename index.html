@@ -7,10 +7,29 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --visited: #3b82f6; --lived: #ef4444; --empty: #ffffff; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        body { 
+            font-family: -apple-system, sans-serif; 
+            margin: 0; 
+            background: #f8fafc; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden;
+            /* Protects the top of the app from the notch/Dynamic Island */
+            padding-top: env(safe-area-inset-top);
+        }
         
         /* Dashboard */
-        #dashboard { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
+        #dashboard { 
+            padding: 10px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px; 
+            background: white; 
+            border-bottom: 1px solid #e2e8f0; 
+            z-index: 10; 
+        }
         .stat-group { border: 1px solid #f1f5f9; padding: 8px; border-radius: 8px; text-align: center; }
         .stat-val { font-size: 18px; font-weight: 800; color: #1e293b; display: block; }
         .stat-num { font-size: 12px; color: #3b82f6; font-weight: 600; display: block; margin-bottom: 2px; }
@@ -18,14 +37,35 @@
 
         /* Map & Info Box */
         #map { flex-grow: 1; width: 100%; background: #aad3df; }
-        #info-box { position: absolute; top: 110px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: none; }
+        #info-box { 
+            position: absolute; 
+            top: calc(110px + env(safe-area-inset-top)); 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: rgba(255,255,255,0.9); 
+            padding: 5px 15px; 
+            border-radius: 20px; 
+            font-weight: bold; 
+            font-size: 14px; 
+            z-index: 1000; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+            display: none; 
+        }
 
         /* Controls */
-        .controls { padding: 10px; background: white; border-top: 1px solid #e2e8f0; z-index: 10; padding-bottom: 30px; }
+        .controls { 
+            padding: 10px; 
+            background: white; 
+            border-top: 1px solid #e2e8f0; 
+            z-index: 10; 
+            /* Protects the bottom tabs from the iPhone Home Bar */
+            padding-bottom: calc(15px + env(safe-area-inset-bottom)); 
+        }
         .mode-selector { display: flex; gap: 5px; margin-bottom: 10px; }
         .mode-btn { flex: 1; border: none; padding: 12px; border-radius: 8px; font-weight: 600; background: #f1f5f9; color: #64748b; }
         .mode-btn.active[data-mode="visited"] { background: var(--visited); color: white; }
         .mode-btn.active[data-mode="lived"] { background: var(--lived); color: white; }
+        
         .tab-bar { display: flex; border-top: 1px solid #f1f5f9; padding-top: 10px; }
         .tab { flex: 1; text-align: center; padding: 10px; font-weight: bold; color: #94a3b8; border: none; background: none; }
         .tab.active { color: #1e293b; border-bottom: 3px solid #1e293b; }
@@ -68,7 +108,7 @@
     let currentMode = 'visited';
     let currentView = 'world';
     let geoLayer;
-    let totalCounts = { world: 177, us: 50 }; // Approximates for % calculation
+    let totalCounts = { world: 177, us: 50 };
     let db = JSON.parse(localStorage.getItem('travelStorage')) || { world: {}, us: {} };
 
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
@@ -136,13 +176,11 @@
     }
 
     function updateStats() {
-        // World Calc
         const worldEntries = Object.values(db.world);
         const worldVisited = worldEntries.filter(v => v === 'visited' || v === 'lived').length;
         const worldLived = worldEntries.filter(v => v === 'lived').length;
         const worldPerc = Math.round((worldVisited / totalCounts.world) * 100) || 0;
         
-        // US Calc
         const usEntries = Object.values(db.us);
         const usVisited = usEntries.filter(v => v === 'visited' || v === 'lived').length;
         const usLived = usEntries.filter(v => v === 'lived').length;
