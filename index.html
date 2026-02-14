@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Travel Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg); overflow: hidden; }
+        
+        /* Dashboard Styling */
+        #dashboard { height: 20vh; padding: 15px; display: flex; justify-content: space-around; align-items: center; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; position: relative; }
+        .stat-card { text-align: center; }
+        .stat-number { font-size: 24px; font-weight: bold; color: var(--primary); }
+        .stat-label { font-size: 12px; color: #64748b; }
+
+        /* Map and Tabs */
+        #map { height: 72vh; width: 100%; }
+        #tabs { height: 8vh; display: flex; background: white; border-top: 1px solid #e2e8f0; }
+        .tab { flex: 1; border: none; background: none; font-weight: 600; color: #94a3b8; }
+        .tab.active { color: var(--primary); border-top: 3px solid var(--primary); }
+    </style>
+</head>
+<body>
+
+<div id="dashboard">
+    <div class="stat-card">
+        <div id="world-stats" class="stat-number">0%</div>
+        <div class="stat-label">WORLD VISITED</div>
+    </div>
+    <div class="stat-card">
+        <div id="us-stats" class="stat-number">0/50</div>
+        <div class="stat-label">US STATES</div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<div id="tabs">
+    <button class="tab active" onclick="switchMap('world')">WORLD</button>
+    <button class="tab" onclick="switchMap('us')">USA</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let map = L.map('map', { zoomControl: false }).setView([20, 0], 2);
+    let currentLayer;
+    let visitedData = JSON.parse(localStorage.getItem('myTravels')) || { world: [], us: [] };
+
+    // Function to style regions
+    function style(feature, type) {
+        const isVisited = visitedData[type].includes(feature.id || feature.properties.name);
+        return {
+            fillColor: isVisited ? '#2563eb' : '#cbd5e1',
+            weight: 1,
+            opacity: 1,
+            color: 'white',
+            fillOpacity: 0.7
+        };
+    }
+
+    async function loadMap(type) {
+        if (currentLayer) map.removeLayer(currentLayer);
+        
+        const url = type === 'world' 
+            ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
+            : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        currentLayer = L.geoJson(data, {
+            style: (f) => style(f, type),
+            onEachFeature: (feature, layer) => {
+                layer.on('click', () => {
+                    const id = feature.id || feature.properties.name;
+                    const index = visitedData[type].indexOf(id);
+                    
+                    if (index > -1) visitedData[type].splice(index, 1);
+                    else visitedData[type].push(id);
+                    
+                    localStorage.setItem('myTravels', JSON.stringify(visitedData));
+                    loadMap(type); // Refresh visual
+                    updateStats(data.features.length, type);
+                });
+            }
+        }).addTo(map);
+
+        if (type === 'us') map.fitBounds(currentLayer.getBounds());
+        updateStats(data.features.length, type);
+    }
+
+    function updateStats(total, type) {
+        const count = visitedData[type].length;
+        if (type === 'world') {
+            const percent = Math.round((count / total) * 100) || 0;
+            document.getElementById('world-stats').innerText = percent + '%';
+        } else {
+            document.getElementById('us-stats').innerText = count + '/50';
+        }
+    }
+
+    function switchMap(type) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        event.target.classList.add('active');
+        loadMap(type);
+    }
+
+    loadMap('world');
+</script>
+</body>
+</html>
