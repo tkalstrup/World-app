@@ -16,8 +16,8 @@
             display: flex; 
             flex-direction: column; 
             overflow: hidden;
-            /* Protects the top of the app from the notch/Dynamic Island */
-            padding-top: env(safe-area-inset-top);
+            /* Extra buffer for the notch/Dynamic Island */
+            padding-top: calc(10px + env(safe-area-inset-top));
         }
         
         /* Dashboard */
@@ -29,17 +29,20 @@
             background: white; 
             border-bottom: 1px solid #e2e8f0; 
             z-index: 10; 
+            border-radius: 12px;
+            margin: 0 10px 5px 10px; /* Gives it a floating look away from edges */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .stat-group { border: 1px solid #f1f5f9; padding: 8px; border-radius: 8px; text-align: center; }
         .stat-val { font-size: 18px; font-weight: 800; color: #1e293b; display: block; }
-        .stat-num { font-size: 12px; color: #3b82f6; font-weight: 600; display: block; margin-bottom: 2px; }
+        .stat-num { font-size: 11px; color: #3b82f6; font-weight: 600; display: block; margin-bottom: 2px; }
         .stat-lab { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; }
 
         /* Map & Info Box */
         #map { flex-grow: 1; width: 100%; background: #aad3df; }
         #info-box { 
             position: absolute; 
-            top: calc(110px + env(safe-area-inset-top)); 
+            top: calc(140px + env(safe-area-inset-top)); 
             left: 50%; 
             transform: translateX(-50%); 
             background: rgba(255,255,255,0.9); 
@@ -54,19 +57,19 @@
 
         /* Controls */
         .controls { 
-            padding: 10px; 
+            padding: 15px 10px; 
             background: white; 
             border-top: 1px solid #e2e8f0; 
             z-index: 10; 
-            /* Protects the bottom tabs from the iPhone Home Bar */
-            padding-bottom: calc(15px + env(safe-area-inset-bottom)); 
+            /* SIGNIFICANTLY increased padding for the bottom bar */
+            padding-bottom: calc(30px + env(safe-area-inset-bottom)); 
         }
-        .mode-selector { display: flex; gap: 5px; margin-bottom: 10px; }
+        .mode-selector { display: flex; gap: 5px; margin-bottom: 12px; }
         .mode-btn { flex: 1; border: none; padding: 12px; border-radius: 8px; font-weight: 600; background: #f1f5f9; color: #64748b; }
         .mode-btn.active[data-mode="visited"] { background: var(--visited); color: white; }
         .mode-btn.active[data-mode="lived"] { background: var(--lived); color: white; }
         
-        .tab-bar { display: flex; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+        .tab-bar { display: flex; border-top: 1px solid #f1f5f9; padding-top: 12px; }
         .tab { flex: 1; text-align: center; padding: 10px; font-weight: bold; color: #94a3b8; border: none; background: none; }
         .tab.active { color: #1e293b; border-bottom: 3px solid #1e293b; }
     </style>
@@ -123,78 +126,4 @@
         const name = feature.properties.name || feature.id;
         const status = db[currentView][name];
         return {
-            fillColor: status === 'visited' ? '#3b82f6' : status === 'lived' ? '#ef4444' : '#ffffff',
-            weight: 1, opacity: 1, color: '#cbd5e1', fillOpacity: 0.8
-        };
-    }
-
-    function showName(name) {
-        const box = document.getElementById('info-box');
-        box.innerText = name;
-        box.style.display = 'block';
-        setTimeout(() => { box.style.display = 'none'; }, 2000);
-    }
-
-    async function switchView(view) {
-        currentView = view;
-        document.getElementById('tab-world').classList.toggle('active', view === 'world');
-        document.getElementById('tab-us').classList.toggle('active', view === 'us');
-        
-        const url = view === 'world' 
-            ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
-            : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
-
-        const res = await fetch(url);
-        const data = await res.json();
-        totalCounts[view] = data.features.length;
-        
-        if (geoLayer) map.removeLayer(geoLayer);
-        geoLayer = L.geoJson(data, {
-            style: styleFeature,
-            onEachFeature: (feature, layer) => {
-                layer.on('click', (e) => {
-                    L.DomEvent.stopPropagation(e);
-                    const name = feature.properties.name || feature.id;
-                    showName(name);
-                    
-                    if (db[currentView][name] === currentMode) {
-                        delete db[currentView][name];
-                    } else {
-                        db[currentView][name] = currentMode;
-                    }
-                    
-                    localStorage.setItem('travelStorage', JSON.stringify(db));
-                    geoLayer.setStyle(styleFeature);
-                    updateStats();
-                });
-            }
-        }).addTo(map);
-
-        if (view === 'us') map.fitBounds(geoLayer.getBounds());
-        else map.setView([20, 0], 2);
-        updateStats();
-    }
-
-    function updateStats() {
-        const worldEntries = Object.values(db.world);
-        const worldVisited = worldEntries.filter(v => v === 'visited' || v === 'lived').length;
-        const worldLived = worldEntries.filter(v => v === 'lived').length;
-        const worldPerc = Math.round((worldVisited / totalCounts.world) * 100) || 0;
-        
-        const usEntries = Object.values(db.us);
-        const usVisited = usEntries.filter(v => v === 'visited' || v === 'lived').length;
-        const usLived = usEntries.filter(v => v === 'lived').length;
-        const usPerc = Math.round((usVisited / totalCounts.us) * 100) || 0;
-
-        document.getElementById('world-stats').innerText = worldPerc + '%';
-        document.getElementById('world-count').innerText = worldVisited + ' Countries';
-        document.getElementById('lived-world').innerText = worldLived;
-        document.getElementById('us-stats').innerText = usPerc + '%';
-        document.getElementById('us-count').innerText = usVisited + ' States';
-        document.getElementById('lived-us').innerText = usLived;
-    }
-
-    switchView('world');
-</script>
-</body>
-</html>
+            fillColor: status === 'visited' ? '#3b8
