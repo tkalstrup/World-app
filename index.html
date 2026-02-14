@@ -13,12 +13,11 @@
         #dashboard { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
         .stat-group { border: 1px solid #f1f5f9; padding: 8px; border-radius: 8px; text-align: center; }
         .stat-val { font-size: 18px; font-weight: 800; color: #1e293b; display: block; }
-        .stat-count { font-size: 11px; color: #3b82f6; font-weight: 600; display: block; margin: 2px 0; }
         .stat-lab { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; }
 
         /* Map & Info Box */
         #map { flex-grow: 1; width: 100%; background: #aad3df; }
-        #info-box { position: absolute; top: 125px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: none; border: 1px solid #e2e8f0; }
+        #info-box { position: absolute; top: 110px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: none; }
 
         /* Controls */
         .controls { padding: 10px; background: white; border-top: 1px solid #e2e8f0; z-index: 10; padding-bottom: 30px; }
@@ -33,20 +32,18 @@
 </head>
 <body>
 
-<div id="info-box">Name</div>
+<div id="info-box">Country Name</div>
 
 <div id="dashboard">
     <div class="stat-group">
-        <span id="world-perc" class="stat-val">0%</span>
-        <span id="world-count" class="stat-count">0 Countries</span>
-        <span class="stat-lab">World</span>
-        <div style="font-size: 10px; color: #ef4444; margin-top:2px;">Lived: <span id="lived-world">0</span></div>
+        <span id="world-stats" class="stat-val">0%</span>
+        <span class="stat-lab">World Visited</span>
+        <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-world">0</span></div>
     </div>
     <div class="stat-group">
-        <span id="us-perc" class="stat-val">0%</span>
-        <span id="us-count" class="stat-count">0 States</span>
-        <span class="stat-lab">USA</span>
-        <div style="font-size: 10px; color: #ef4444; margin-top:2px;">Lived: <span id="lived-us">0</span></div>
+        <span id="us-stats" class="stat-val">0%</span>
+        <span class="stat-lab">USA Visited</span>
+        <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-us">0</span></div>
     </div>
 </div>
 
@@ -63,4 +60,98 @@
     </div>
 </div>
 
-<script src="https://unpkg
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let currentMode = 'visited';
+    let currentView = 'world';
+    let geoLayer;
+    let totalCounts = { world: 177, us: 50 }; // Approximates for % calculation
+    let db = JSON.parse(localStorage.getItem('travelStorage')) || { world: {}, us: {} };
+
+    const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('btn-visited').classList.toggle('active', mode === 'visited');
+        document.getElementById('btn-lived').classList.toggle('active', mode === 'lived');
+    }
+
+    function styleFeature(feature) {
+        const name = feature.properties.name || feature.id;
+        const status = db[currentView][name];
+        return {
+            fillColor: status === 'visited' ? '#3b82f6' : status === 'lived' ? '#ef4444' : '#ffffff',
+            weight: 1, opacity: 1, color: '#cbd5e1', fillOpacity: 0.8
+        };
+    }
+
+    function showName(name) {
+        const box = document.getElementById('info-box');
+        box.innerText = name;
+        box.style.display = 'block';
+        setTimeout(() => { box.style.display = 'none'; }, 2000);
+    }
+
+    async function switchView(view) {
+        currentView = view;
+        document.getElementById('tab-world').classList.toggle('active', view === 'world');
+        document.getElementById('tab-us').classList.toggle('active', view === 'us');
+        
+        const url = view === 'world' 
+            ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
+            : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
+
+        const res = await fetch(url);
+        const data = await res.json();
+        totalCounts[view] = data.features.length;
+        
+        if (geoLayer) map.removeLayer(geoLayer);
+        geoLayer = L.geoJson(data, {
+            style: styleFeature,
+            onEachFeature: (feature, layer) => {
+                layer.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    const name = feature.properties.name || feature.id;
+                    showName(name);
+                    
+                    if (db[currentView][name] === currentMode) {
+                        delete db[currentView][name];
+                    } else {
+                        db[currentView][name] = currentMode;
+                    }
+                    
+                    localStorage.setItem('travelStorage', JSON.stringify(db));
+                    geoLayer.setStyle(styleFeature);
+                    updateStats();
+                });
+            }
+        }).addTo(map);
+
+        if (view === 'us') map.fitBounds(geoLayer.getBounds());
+        else map.setView([20, 0], 2);
+        updateStats();
+    }
+
+    function updateStats() {
+        // World Calc
+        const worldEntries = Object.values(db.world);
+        const worldVisited = worldEntries.filter(v => v === 'visited' || v === 'lived').length;
+        const worldLived = worldEntries.filter(v => v === 'lived').length;
+        const worldPerc = Math.round((worldVisited / totalCounts.world) * 100);
+        
+        // US Calc
+        const usEntries = Object.values(db.us);
+        const usVisited = usEntries.filter(v => v === 'visited' || v === 'lived').length;
+        const usLived = usEntries.filter(v => v === 'lived').length;
+        const usPerc = Math.round((usVisited / totalCounts.us) * 100);
+
+        document.getElementById('world-stats').innerText = worldPerc + '%';
+        document.getElementById('lived-world').innerText = worldLived;
+        document.getElementById('us-stats').innerText = usPerc + '%';
+        document.getElementById('lived-us').innerText = usLived;
+    }
+
+    switchView('world');
+</script>
+</body>
+</html>
