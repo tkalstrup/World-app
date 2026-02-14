@@ -13,6 +13,7 @@
         #dashboard { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
         .stat-group { border: 1px solid #f1f5f9; padding: 8px; border-radius: 8px; text-align: center; }
         .stat-val { font-size: 18px; font-weight: 800; color: #1e293b; display: block; }
+        .stat-num { font-size: 12px; color: #3b82f6; font-weight: 600; display: block; margin-bottom: 2px; }
         .stat-lab { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; }
 
         /* Map & Info Box */
@@ -37,11 +38,13 @@
 <div id="dashboard">
     <div class="stat-group">
         <span id="world-stats" class="stat-val">0%</span>
+        <span id="world-count" class="stat-num">0 Countries</span>
         <span class="stat-lab">World Visited</span>
         <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-world">0</span></div>
     </div>
     <div class="stat-group">
         <span id="us-stats" class="stat-val">0%</span>
+        <span id="us-count" class="stat-num">0 States</span>
         <span class="stat-lab">USA Visited</span>
         <div style="font-size: 10px; color: #ef4444;">Lived: <span id="lived-us">0</span></div>
     </div>
@@ -137,17 +140,19 @@
         const worldEntries = Object.values(db.world);
         const worldVisited = worldEntries.filter(v => v === 'visited' || v === 'lived').length;
         const worldLived = worldEntries.filter(v => v === 'lived').length;
-        const worldPerc = Math.round((worldVisited / totalCounts.world) * 100);
+        const worldPerc = Math.round((worldVisited / totalCounts.world) * 100) || 0;
         
         // US Calc
         const usEntries = Object.values(db.us);
         const usVisited = usEntries.filter(v => v === 'visited' || v === 'lived').length;
         const usLived = usEntries.filter(v => v === 'lived').length;
-        const usPerc = Math.round((usVisited / totalCounts.us) * 100);
+        const usPerc = Math.round((usVisited / totalCounts.us) * 100) || 0;
 
         document.getElementById('world-stats').innerText = worldPerc + '%';
+        document.getElementById('world-count').innerText = worldVisited + ' Countries';
         document.getElementById('lived-world').innerText = worldLived;
         document.getElementById('us-stats').innerText = usPerc + '%';
+        document.getElementById('us-count').innerText = usVisited + ' States';
         document.getElementById('lived-us').innerText = usLived;
     }
 
