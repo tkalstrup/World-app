@@ -3,50 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Travel Tracker Pro</title>
+    <title>Travel Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root { --visited: #3b82f6; --lived: #ef4444; --empty: #e2e8f0; }
-        body { font-family: -apple-system, system-ui; margin: 0; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; }
-        
-        /* Dashboard */
-        #dashboard { padding: 20px 10px; display: flex; justify-content: space-around; background: white; border-bottom: 1px solid #e2e8f0; }
-        .stat { text-align: center; }
-        .stat-val { font-size: 22px; font-weight: 800; color: #1e293b; }
-        .stat-lab { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* Map Container */
-        #map { flex-grow: 1; width: 100%; z-index: 1; }
-
-        /* Controls */
-        .controls { padding: 15px; background: white; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #e2e8f0; }
-        .mode-selector { display: flex; border-radius: 8px; background: #f1f5f9; padding: 4px; }
-        .mode-btn { flex: 1; border: none; padding: 10px; border-radius: 6px; font-weight: 600; font-size: 13px; transition: 0.2s; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        #dashboard { padding: 15px; display: flex; justify-content: space-around; background: white; border-bottom: 1px solid #e2e8f0; z-index: 10; }
+        .stat-val { font-size: 20px; font-weight: 800; color: #1e293b; display: block; }
+        .stat-lab { font-size: 10px; color: #64748b; text-transform: uppercase; }
+        #map { flex-grow: 1; width: 100%; background: #aad3df; }
+        .controls { padding: 10px; background: white; border-top: 1px solid #e2e8f0; z-index: 10; padding-bottom: 30px; }
+        .mode-selector { display: flex; gap: 5px; margin-bottom: 10px; }
+        .mode-btn { flex: 1; border: none; padding: 12px; border-radius: 8px; font-weight: 600; background: #f1f5f9; color: #64748b; }
         .mode-btn.active[data-mode="visited"] { background: var(--visited); color: white; }
         .mode-btn.active[data-mode="lived"] { background: var(--lived); color: white; }
-        
         .tab-bar { display: flex; border-top: 1px solid #f1f5f9; padding-top: 10px; }
         .tab { flex: 1; text-align: center; padding: 10px; font-weight: bold; color: #94a3b8; border: none; background: none; }
-        .tab.active { color: #1e293b; border-bottom: 2px solid #1e293b; }
+        .tab.active { color: #1e293b; border-bottom: 3px solid #1e293b; }
     </style>
 </head>
 <body>
 
 <div id="dashboard">
-    <div class="stat"><div id="count-world" class="stat-val">0</div><div class="stat-lab">Countries</div></div>
-    <div class="stat"><div id="count-us" class="stat-val">0</div><div class="stat-lab">US States</div></div>
+    <div style="text-align:center"><span id="count-world" class="stat-val">0</span><span class="stat-lab">World</span></div>
+    <div style="text-align:center"><span id="count-us" class="stat-val">0</span><span class="stat-lab">US States</span></div>
 </div>
 
 <div id="map"></div>
 
 <div class="controls">
     <div class="mode-selector">
-        <button class="mode-btn active" data-mode="visited" onclick="setMode('visited')">Visited</button>
-        <button class="mode-btn" data-mode="lived" onclick="setMode('lived')">Lived Here</button>
+        <button id="btn-visited" class="mode-btn active" data-mode="visited" onclick="setMode('visited')">Visited</button>
+        <button id="btn-lived" class="mode-btn" data-mode="lived" onclick="setMode('lived')">Lived</button>
     </div>
     <div class="tab-bar">
-        <button id="tab-world" class="tab active" onclick="switchView('world')">World Map</button>
-        <button id="tab-us" class="tab" onclick="switchView('us')">USA Map</button>
+        <button id="tab-world" class="tab active" onclick="switchView('world')">WORLD</button>
+        <button id="tab-us" class="tab" onclick="switchView('us')">USA</button>
     </div>
 </div>
 
@@ -54,68 +46,69 @@
 <script>
     let currentMode = 'visited';
     let currentView = 'world';
-    let geoData = { world: null, us: null };
-    
-    // Data storage: { world: { "France": "visited", "USA": "lived" }, us: { "California": "lived" } }
+    let geoLayer;
     let db = JSON.parse(localStorage.getItem('travelStorage')) || { world: {}, us: {} };
 
+    // Initialize Map
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
 
     function setMode(mode) {
         currentMode = mode;
-        document.querySelectorAll('.mode-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.mode === mode);
-        });
+        document.getElementById('btn-visited').classList.toggle('active', mode === 'visited');
+        document.getElementById('btn-lived').classList.toggle('active', mode === 'lived');
     }
 
-    function getStyle(feature) {
+    function styleFeature(feature) {
         const name = feature.properties.name || feature.id;
         const status = db[currentView][name];
-        let color = 'var(--empty)';
-        if (status === 'visited') color = 'var(--visited)';
-        if (status === 'lived') color = 'var(--lived)';
-        
-        return { fillColor: color, weight: 1, color: 'white', fillOpacity: 0.8 };
+        return {
+            fillColor: status === 'visited' ? '#3b82f6' : status === 'lived' ? '#ef4444' : '#ffffff',
+            weight: 1,
+            opacity: 1,
+            color: '#cbd5e1',
+            fillOpacity: 0.8
+        };
     }
 
     async function switchView(view) {
         currentView = view;
-        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-'+view));
+        document.getElementById('tab-world').classList.toggle('active', view === 'world');
+        document.getElementById('tab-us').classList.toggle('active', view === 'us');
         
-        if (!geoData[view]) {
-            const url = view === 'world' 
-                ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
-                : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
+        const url = view === 'world' 
+            ? 'https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson'
+            : 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
+
+        try {
             const res = await fetch(url);
-            geoData[view] = await res.json();
+            const data = await res.json();
+            
+            if (geoLayer) map.removeLayer(geoLayer);
+
+            geoLayer = L.geoJson(data, {
+                style: styleFeature,
+                onEachFeature: (feature, layer) => {
+                    layer.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        const name = feature.properties.name || feature.id;
+                        if (db[currentView][name] === currentMode) {
+                            delete db[currentView][name];
+                        } else {
+                            db[currentView][name] = currentMode;
+                        }
+                        localStorage.setItem('travelStorage', JSON.stringify(db));
+                        geoLayer.setStyle(styleFeature);
+                        updateStats();
+                    });
+                }
+            }).addTo(map);
+
+            if (view === 'us') map.fitBounds(geoLayer.getBounds());
+            else map.setView([20, 0], 2);
+            updateStats();
+        } catch (err) {
+            console.error("Failed to load map data", err);
         }
-
-        renderMap();
-    }
-
-    function renderMap() {
-        map.eachLayer(l => if(l.feature) map.removeLayer(l));
-        
-        const layer = L.geoJson(geoData[currentView], {
-            style: getStyle,
-            onEachFeature: (feature, layer) => {
-                layer.on('click', () => {
-                    const name = feature.properties.name || feature.id;
-                    // Toggle logic
-                    if (db[currentView][name] === currentMode) {
-                        delete db[currentView][name];
-                    } else {
-                        db[currentView][name] = currentMode;
-                    }
-                    localStorage.setItem('travelStorage', JSON.stringify(db));
-                    renderMap();
-                    updateStats();
-                });
-            }
-        }).addTo(map);
-        
-        if (currentView === 'us') map.fitBounds(layer.getBounds());
-        updateStats();
     }
 
     function updateStats() {
